@@ -26,9 +26,13 @@ async function initExcel() {
   if (!fs.existsSync(EXCEL_FILE)) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Orders");
-    const headers = ["Order #","Date","Time","Name","Phone","City","Product","Qty","Unit Price","Subtotal","COD","Total","Note","Status"];
+    const headers = [
+      "Order #","Date","Time","Name","Phone",
+      "Email","Street Address","City","Province","Postcode",
+      "Product","Qty","Unit Price","Subtotal","COD","Total","Note","Status"
+    ];
+    const widths = [10,18,12,22,18,26,28,16,22,12,30,8,14,14,12,14,28,14];
     const headerRow = ws.addRow(headers);
-    const widths = [10,18,12,22,18,16,30,8,14,14,12,14,30,14];
     widths.forEach((w,i) => { ws.getColumn(i+1).width = w; });
     headerRow.eachCell(cell => {
       cell.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:"FF10107A" } };
@@ -53,20 +57,41 @@ async function saveOrderToExcel(order) {
   const cod = subtotal > 0 ? 350 : 0;
   const total = subtotal + cod;
 
+  // Parse note field
+  const noteStr = order.note || "";
+  const emailMatch    = noteStr.match(/Email:([^|]+)/);
+  const streetMatch   = noteStr.match(/Street:([^|]+)/);
+  const postcodeMatch = noteStr.match(/Postcode:([^|]+)/);
+  const noteMatch     = noteStr.match(/Note:(.+)/);
+
+  const email    = emailMatch    ? emailMatch[1].trim()    : "—";
+  const street   = streetMatch   ? streetMatch[1].trim()   : "—";
+  const postcode = postcodeMatch ? postcodeMatch[1].trim() : "—";
+  const noteOnly = noteMatch     ? noteMatch[1].trim()     : "—";
+
+  // Parse city and province
+  const cityParts    = (order.city || "").split(",");
+  const cityOnly     = cityParts[0]?.trim() || "—";
+  const provinceOnly = cityParts[1]?.trim() || "—";
+
   const newRow = ws.addRow([
     orderNo,
     dateStr,
     timeStr,
     order.name,
     order.phone,
-    order.city || "—",
+    email,
+    street,
+    cityOnly,
+    provinceOnly,
+    postcode,
     order.product,
     qty,
     unitPrice > 0 ? `Rs. ${unitPrice.toLocaleString()}` : "Wholesale",
     subtotal > 0 ? `Rs. ${subtotal.toLocaleString()}` : "—",
     cod > 0 ? `Rs. ${cod}` : "—",
     total > 0 ? `Rs. ${total.toLocaleString()}` : "Contact",
-    order.note || "—",
+    noteOnly,
     "Pending"
   ]);
 
@@ -77,11 +102,14 @@ async function saveOrderToExcel(order) {
     cell.font = { name:"Calibri", size:10 };
   });
 
-  newRow.getCell(12).font = { bold:true, color:{ argb:"FF10107A" }, size:11, name:"Calibri" };
-  newRow.getCell(14).fill = { type:"pattern", pattern:"solid", fgColor:{ argb:"FFFFF3CD" } };
-  newRow.getCell(14).font = { bold:true, color:{ argb:"FF856404" }, size:10, name:"Calibri" };
-  newRow.height = 22;
+  // Total column bold
+  newRow.getCell(16).font = { bold:true, color:{ argb:"FF10107A" }, size:11, name:"Calibri" };
 
+  // Status column style
+  newRow.getCell(18).fill = { type:"pattern", pattern:"solid", fgColor:{ argb:"FFFFF3CD" } };
+  newRow.getCell(18).font = { bold:true, color:{ argb:"FF856404" }, size:10, name:"Calibri" };
+
+  newRow.height = 22;
   await wb.xlsx.writeFile(EXCEL_FILE);
   return { orderNo, total };
 }
@@ -114,10 +142,10 @@ app.get("/api/orders", async (req, res) => {
         date:     row.getCell(2).value,
         name:     row.getCell(4).value,
         phone:    row.getCell(5).value,
-        city:     row.getCell(6).value,
-        product:  row.getCell(7).value,
-        total:    row.getCell(12).value,
-        status:   row.getCell(14).value,
+        city:     row.getCell(8).value,
+        product:  row.getCell(11).value,
+        total:    row.getCell(16).value,
+        status:   row.getCell(18).value,
       });
     });
     res.json({ success:true, count:orders.length, orders });
