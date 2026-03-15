@@ -15,13 +15,20 @@ if (!fs.existsSync(path.join(__dirname, "orders"))) {
   fs.mkdirSync(path.join(__dirname, "orders"));
 }
 
+function getPKTime() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-GB", { timeZone:"Asia/Karachi", day:"2-digit", month:"short", year:"numeric" });
+  const timeStr = now.toLocaleTimeString("en-US", { timeZone:"Asia/Karachi", hour:"2-digit", minute:"2-digit", hour12:true });
+  return { dateStr, timeStr };
+}
+
 async function initExcel() {
   if (!fs.existsSync(EXCEL_FILE)) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Orders");
     const headers = ["Order #","Date","Time","Name","Phone","City","Product","Qty","Unit Price","Subtotal","COD","Total","Note","Status"];
     const headerRow = ws.addRow(headers);
-    const widths   = [10,18,12,22,18,16,30,8,14,14,12,14,30,14];
+    const widths = [10,18,12,22,18,16,30,8,14,14,12,14,30,14];
     widths.forEach((w,i) => { ws.getColumn(i+1).width = w; });
     headerRow.eachCell(cell => {
       cell.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:"FF10107A" } };
@@ -39,9 +46,7 @@ async function saveOrderToExcel(order) {
   await wb.xlsx.readFile(EXCEL_FILE);
   const ws = wb.getWorksheet("Orders");
   const orderNo = ws.rowCount;
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("en-PK", { day:"2-digit", month:"short", year:"numeric" });
-  const timeStr = now.toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" });
+  const { dateStr, timeStr } = getPKTime();
   const unitPrice = parseInt(order.unit_price) || 0;
   const qty = parseInt(order.quantity) || 1;
   const subtotal = unitPrice * qty;
@@ -72,14 +77,11 @@ async function saveOrderToExcel(order) {
     cell.font = { name:"Calibri", size:10 };
   });
 
-  // Total cell bold
   newRow.getCell(12).font = { bold:true, color:{ argb:"FF10107A" }, size:11, name:"Calibri" };
-
-  // Status cell
   newRow.getCell(14).fill = { type:"pattern", pattern:"solid", fgColor:{ argb:"FFFFF3CD" } };
   newRow.getCell(14).font = { bold:true, color:{ argb:"FF856404" }, size:10, name:"Calibri" };
-
   newRow.height = 22;
+
   await wb.xlsx.writeFile(EXCEL_FILE);
   return { orderNo, total };
 }
